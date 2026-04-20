@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FaceCloud API Test</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --ink: #1b1f24;
+        --muted: #5b6470;
+        --accent: #1463ff;
+        --ok: #0a8f55;
+        --err: #c13030;
+        --border: #d8dee8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          Segoe UI,
+          Tahoma,
+          Geneva,
+          Verdana,
+          sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 20%, #dce8ff, transparent 40%),
+          radial-gradient(circle at 85% 0%, #e8fff3, transparent 32%), var(--bg);
+      }
+
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px 16px 36px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      .muted {
+        color: var(--muted);
+        margin-bottom: 20px;
+      }
+
+      .bar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      label {
+        display: block;
+        margin: 8px 0 4px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input,
+      button,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font-size: 14px;
+      }
+
+      input:focus,
+      textarea:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+
+      button:hover {
+        filter: brightness(0.95);
+      }
+
+      .secondary {
+        background: #1f2937;
+      }
+
+      .status {
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      .status.ok {
+        color: var(--ok);
+      }
+
+      .status.err {
+        color: var(--err);
+      }
+
+      pre {
+        background: #0b1220;
+        color: #e5ebff;
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+        min-height: 190px;
+        margin: 12px 0 0;
+        font-size: 12px;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      @media (max-width: 800px) {
+        .split,
+        .bar {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>FaceCloud API Test</h1>
+      <div class="muted">Simple test screen for login, face register/verify, and attendance scan.</div>
+
+      <div class="bar">
+        <input id="baseUrl" value="http://localhost:3000" />
+        <button id="healthBtn" class="secondary">Check /</button>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>1) Auth</h2>
+          <label>Email</label>
+          <input id="email" value="student01@example.com" />
+          <label>Password</label>
+          <input id="password" type="password" value="123456" />
+          <label>Full Name (for register)</label>
+          <input id="fullName" value="Student Demo" />
+          <label>User Code (for register)</label>
+          <input id="userCode" value="SV001" />
+          <div class="split">
+            <button id="registerBtn">Register</button>
+            <button id="loginBtn">Login</button>
+          </div>
+          <div id="authStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>2) Shared Data</h2>
+          <label>JWT Token</label>
+          <textarea id="token" rows="4" placeholder="Will auto-fill after login"></textarea>
+          <label>Attendance Session ID</label>
+          <input id="sessionId" value="1" />
+          <label>Image URL (optional)</label>
+          <input id="imageUrl" placeholder="https://..." />
+          <label>Or choose image file</label>
+          <input id="imageFile" type="file" accept="image/*" />
+          <div id="imgStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>3) Face</h2>
+          <button id="faceRegisterBtn">POST /face/register</button>
+          <button id="faceVerifyBtn">POST /face/verify</button>
+          <div id="faceStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>4) Attendance</h2>
+          <button id="scanBtn">POST /attendance/scan</button>
+          <div id="scanStatus" class="status"></div>
+        </div>
+      </div>
+
+      <pre id="output">Ready.</pre>
+    </div>
+
+    <script>
+      let imageBase64 = ''
+
+      const output = document.getElementById('output')
+      const baseUrlInput = document.getElementById('baseUrl')
+
+      const setStatus = (id, message, ok) => {
+        const el = document.getElementById(id)
+        el.textContent = message
+        el.className = 'status ' + (ok ? 'ok' : 'err')
+      }
+
+      const writeOutput = (title, data) => {
+        output.textContent = title + '\n\n' + JSON.stringify(data, null, 2)
+      }
+
+      const getHeaders = () => {
+        const token = document.getElementById('token').value.trim()
+        const headers = { 'Content-Type': 'application/json' }
+        if (token) headers.Authorization = 'Bearer ' + token
+        return headers
+      }
+
+      const toDataUrl = (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
+      const fetchImageAsBase64 = async (url) => {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Could not fetch image URL')
+        const blob = await response.blob()
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      }
+
+      const ensureImage = async () => {
+        if (imageBase64) return imageBase64
+
+        const fileInput = document.getElementById('imageFile')
+        const url = document.getElementById('imageUrl').value.trim()
+
+        if (fileInput.files[0]) {
+          imageBase64 = await toDataUrl(fileInput.files[0])
+          setStatus('imgStatus', 'Image loaded from file', true)
+          return imageBase64
+        }
+
+        if (url) {
+          imageBase64 = await fetchImageAsBase64(url)
+          setStatus('imgStatus', 'Image loaded from URL', true)
+          return imageBase64
+        }
+
+        throw new Error('Please choose image file or provide image URL')
+      }
+
+      document.getElementById('imageFile').addEventListener('change', async (e) => {
+        try {
+          if (e.target.files[0]) {
+            imageBase64 = await toDataUrl(e.target.files[0])
+            setStatus('imgStatus', 'Image file is ready', true)
+          }
+        } catch (error) {
+          setStatus('imgStatus', error.message, false)
+        }
+      })
+
+      document.getElementById('healthBtn').addEventListener('click', async () => {
+        try {
+          const response = await fetch(baseUrlInput.value.trim() + '/')
+          const text = await response.text()
+          writeOutput('GET / success', { status: response.status, body: text })
+        } catch (error) {
+          writeOutput('GET / failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('registerBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value.trim(),
+            full_name: document.getElementById('fullName').value.trim(),
+            user_code: document.getElementById('userCode').value.trim()
+          }
+          const response = await fetch(baseUrlInput.value.trim() + '/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+          const data = await response.json()
+          setStatus('authStatus', response.ok ? 'Register success' : 'Register failed', response.ok)
+          writeOutput('POST /auth/register', { status: response.status, data })
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('POST /auth/register failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('loginBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value.trim()
+          }
+          const response = await fetch(baseUrlInput.value.trim() + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+          const data = await response.json()
+          if (data.token) document.getElementById('token').value = data.token
+          setStatus('authStatus', response.ok ? 'Login success' : 'Login failed', response.ok)
+          writeOutput('POST /auth/login', { status: response.status, data })
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('POST /auth/login failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('faceRegisterBtn').addEventListener('click', async () => {
+        try {
+          const img = await ensureImage()
+          const response = await fetch(baseUrlInput.value.trim() + '/face/register', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ imageBase64: img, face_image_url: null })
+          })
+          const data = await response.json()
+          setStatus('faceStatus', response.ok ? 'Face register success' : 'Face register failed', response.ok)
+          writeOutput('POST /face/register', { status: response.status, data })
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/register failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('faceVerifyBtn').addEventListener('click', async () => {
+        try {
+          const img = await ensureImage()
+          const response = await fetch(baseUrlInput.value.trim() + '/face/verify', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ imageBase64: img, captured_image_url: null })
+          })
+          const data = await response.json()
+          setStatus('faceStatus', response.ok ? 'Face verify success' : 'Face verify failed', response.ok)
+          writeOutput('POST /face/verify', { status: response.status, data })
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/verify failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('scanBtn').addEventListener('click', async () => {
+        try {
+          const img = await ensureImage()
+          const sessionId = Number(document.getElementById('sessionId').value.trim())
+          const response = await fetch(baseUrlInput.value.trim() + '/attendance/scan', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({
+              imageBase64: img,
+              attendance_session_id: Number.isNaN(sessionId) ? null : sessionId,
+              captured_image_url: null
+            })
+          })
+          const data = await response.json()
+          setStatus('scanStatus', response.ok ? 'Attendance scan success' : 'Attendance scan failed', response.ok)
+          writeOutput('POST /attendance/scan', { status: response.status, data })
+        } catch (error) {
+          setStatus('scanStatus', error.message, false)
+          writeOutput('POST /attendance/scan failed', { error: error.message })
+        }
+      })
+    </script>
+  </body>
+</html>
