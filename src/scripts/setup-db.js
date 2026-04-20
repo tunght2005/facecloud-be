@@ -60,9 +60,13 @@ CREATE TABLE IF NOT EXISTS face_profiles (
     face_profile_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id) ON DELETE CASCADE,
     face_aws_id VARCHAR(255),
+    aws_collection_id VARCHAR(255),
     face_image_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE face_profiles ADD COLUMN IF NOT EXISTS aws_collection_id VARCHAR(255);
+CREATE INDEX IF NOT EXISTS idx_face_profiles_user_id ON face_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_face_profiles_face_aws_id ON face_profiles(face_aws_id);
 
 -- =========================================
 -- 5. FACE VERIFICATION LOGS
@@ -71,10 +75,15 @@ CREATE TABLE IF NOT EXISTS face_verification_logs (
     verification_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id),
     captured_image_url TEXT,
+    matched_face_aws_id VARCHAR(255),
     similarity_score FLOAT,
     verification_status VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE face_verification_logs ADD COLUMN IF NOT EXISTS matched_face_aws_id VARCHAR(255);
+
+CREATE INDEX IF NOT EXISTS idx_face_verification_user ON face_verification_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_face_verification_status ON face_verification_logs(verification_status);
 
 -- =========================================
 -- 6. ATTENDANCE SESSIONS (BUỔI HỌC)
