@@ -26,6 +26,7 @@
     "prettier": "^3.8.1"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1032.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

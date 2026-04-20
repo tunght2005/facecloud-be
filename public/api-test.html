@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FaceCloud Full API Test</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --ink: #1b1f24;
+        --muted: #5b6470;
+        --accent: #1463ff;
+        --ok: #0a8f55;
+        --err: #c13030;
+        --border: #d8dee8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          Segoe UI,
+          Tahoma,
+          Geneva,
+          Verdana,
+          sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 20%, #dce8ff, transparent 40%),
+          radial-gradient(circle at 85% 0%, #e8fff3, transparent 32%), var(--bg);
+      }
+
+      .wrap {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px 16px 36px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+
+      .muted {
+        color: var(--muted);
+        margin-bottom: 20px;
+      }
+
+      .bar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      label {
+        display: block;
+        margin: 8px 0 4px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input,
+      button,
+      textarea,
+      select {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font-size: 14px;
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+
+      button:hover {
+        filter: brightness(0.95);
+      }
+
+      .secondary {
+        background: #1f2937;
+      }
+
+      .success {
+        background: #0a8f55;
+      }
+
+      .warn {
+        background: #ff9100;
+      }
+
+      .danger {
+        background: #c13030;
+      }
+
+      .status {
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      .status.ok {
+        color: var(--ok);
+      }
+
+      .status.err {
+        color: var(--err);
+      }
+
+      pre {
+        background: #0b1220;
+        color: #e5ebff;
+        padding: 12px;
+        border-radius: 10px;
+        overflow: auto;
+        min-height: 220px;
+        margin: 12px 0 0;
+        font-size: 12px;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .triple {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+      }
+
+      .camera-box {
+        display: grid;
+        gap: 10px;
+      }
+
+      .camera-view {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #111827;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+      }
+
+      @media (max-width: 900px) {
+        .split,
+        .bar,
+        .triple {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>FaceCloud - Full Backend API Test</h1>
+      <div class="muted">Full API coverage + Camera face capture for compare and attendance scan</div>
+
+      <div class="bar">
+        <input id="baseUrl" value="http://localhost:3000" />
+        <button id="healthBtn" class="secondary">GET / (Health)</button>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>1) Auth</h2>
+          <label>Email</label>
+          <input id="email" value="superadmin@gmail.com" />
+          <label>Password</label>
+          <input id="password" type="password" value="123456" />
+          <label>Full Name (register)</label>
+          <input id="fullName" value="Admin User" />
+          <label>User Code (register)</label>
+          <input id="userCode" value="ADMIN001" />
+          <div class="split">
+            <button id="registerBtn">POST /auth/register</button>
+            <button id="loginBtn">POST /auth/login</button>
+          </div>
+          <div class="split">
+            <button id="meBtn" class="secondary">GET /auth/me</button>
+            <button id="profileBtn" class="secondary">GET /auth/profile</button>
+          </div>
+          <div id="authStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>2) Shared Data & Image</h2>
+          <label>JWT Token</label>
+          <textarea id="token" rows="3" placeholder="Auto-filled after login" readonly></textarea>
+          <label>Current User ID</label>
+          <input id="userId" readonly />
+          <label>Target User ID (optional for /face/*/:user_id)</label>
+          <input id="targetUserId" type="number" placeholder="e.g. 2" />
+          <label>Choose Image File</label>
+          <input id="imageFile" type="file" accept="image/*" />
+          <label>Or Image URL</label>
+          <input id="imageUrl" placeholder="https://..." />
+          <label>Face Image URL (for registration)</label>
+          <input id="faceImageUrl" placeholder="https://... (optional)" />
+          <label>Image Source</label>
+          <select id="imageSource">
+            <option value="auto">Auto (camera > file > url)</option>
+            <option value="camera">Camera only</option>
+            <option value="file">File only</option>
+            <option value="url">URL only</option>
+          </select>
+          <div id="imgStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>3) Camera Capture</h2>
+          <div class="camera-box">
+            <video id="cameraPreview" class="camera-view" autoplay muted playsinline></video>
+            <canvas id="cameraCanvas" style="display: none"></canvas>
+            <img id="capturedPreview" class="camera-view" alt="Captured" />
+          </div>
+          <div class="triple">
+            <button id="startCameraBtn" class="secondary">Start Camera</button>
+            <button id="captureCameraBtn" class="warn">Capture</button>
+            <button id="stopCameraBtn" class="danger">Stop Camera</button>
+          </div>
+          <div class="split">
+            <button id="compareCameraBtn" class="secondary">Camera Compare (/face/compare)</button>
+            <button id="scanCameraBtn" class="danger">Camera Scan (/attendance/scan)</button>
+          </div>
+          <div id="cameraStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>4) Face APIs</h2>
+          <div class="split">
+            <button id="registerFaceBtn" class="success">POST /face/register</button>
+            <button id="verifyFaceBtn" class="secondary">POST /face/verify</button>
+          </div>
+          <div class="split">
+            <button id="compareBtn" class="secondary">POST /face/compare</button>
+            <button id="compareByUserBtn" class="secondary">POST /face/compare/:user_id</button>
+          </div>
+          <div class="split">
+            <button id="getFaceProfileBtn" class="secondary">GET /face/profile</button>
+            <button id="getFaceProfileByUserBtn" class="secondary">GET /face/profile/:user_id</button>
+          </div>
+          <div class="split">
+            <button id="faceHistoryBtn" class="secondary">GET /face/history</button>
+            <button id="faceHistoryByUserBtn" class="secondary">GET /face/history/:user_id</button>
+          </div>
+          <div id="faceStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>5) Attendance APIs</h2>
+          <label>Class ID</label>
+          <input id="classId" type="number" value="3" />
+          <label>Session Date</label>
+          <input id="sessionDate" type="date" />
+          <label>Session ID</label>
+          <input id="sessionId" type="number" value="1" />
+          <div class="split">
+            <button id="createSessionBtn">POST /attendance/session/create</button>
+            <button id="openSessionBtn" class="warn">POST /attendance/session/open</button>
+          </div>
+          <div class="split">
+            <button id="closeSessionBtn" class="danger">POST /attendance/session/close</button>
+            <button id="scanBtn" class="danger">POST /attendance/scan</button>
+          </div>
+          <div class="split">
+            <button id="listSessionsBtn" class="secondary">GET /attendance/session/list</button>
+            <button id="sessionDetailsBtn" class="secondary">GET /attendance/session/:id</button>
+          </div>
+          <div id="attendanceStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>6) Classes APIs</h2>
+          <label>New Class Name</label>
+          <input id="className" value="Lop Demo API" />
+          <label>Teacher ID (optional)</label>
+          <input id="teacherId" type="number" placeholder="e.g. 2" />
+          <label>Student IDs CSV (optional)</label>
+          <input id="studentIds" placeholder="4,5,6" />
+          <label>Class Detail ID</label>
+          <input id="classDetailsId" type="number" value="3" />
+          <div class="split">
+            <button id="classesListBtn" class="secondary">GET /classes</button>
+            <button id="createClassBtn">POST /classes</button>
+          </div>
+          <div class="split">
+            <button id="classByIdBtn" class="secondary">GET /classes/:id</button>
+            <button id="classStudentsBtn" class="secondary">GET /classes/:id/students</button>
+          </div>
+          <div id="classesStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>7) Users APIs (Admin)</h2>
+          <label>User ID for update/delete</label>
+          <input id="manageUserId" type="number" value="2" />
+          <label>New User Email</label>
+          <input id="newUserEmail" value="demo.teacher@example.com" />
+          <label>New User Password</label>
+          <input id="newUserPassword" value="123456" />
+          <label>New User Full Name</label>
+          <input id="newUserFullName" value="Demo Teacher" />
+          <label>New User Code</label>
+          <input id="newUserCode" value="GV999" />
+          <label>New User Role</label>
+          <select id="newUserRole">
+            <option value="student">student</option>
+            <option value="teacher" selected>teacher</option>
+            <option value="admin">admin</option>
+          </select>
+          <label>Update full_name</label>
+          <input id="updateUserName" value="Updated User Name" />
+          <label>Update class_id</label>
+          <input id="updateUserClassId" type="number" value="3" />
+          <label>Update status</label>
+          <select id="updateUserStatus">
+            <option value="active" selected>active</option>
+            <option value="inactive">inactive</option>
+          </select>
+          <div class="split">
+            <button id="createUserBtn">POST /users</button>
+            <button id="listUsersBtn" class="secondary">GET /users</button>
+          </div>
+          <div class="split">
+            <button id="getUserByIdBtn" class="secondary">GET /users/:id</button>
+            <button id="updateUserBtn" class="warn">PUT /users/:id</button>
+          </div>
+          <div class="split">
+            <button id="deleteUserBtn" class="danger">DELETE /users/:id</button>
+          </div>
+          <div id="usersStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+          <h2>8) Notifications APIs</h2>
+          <label>Notification ID</label>
+          <input id="notificationId" type="number" value="1" />
+          <div class="split">
+            <button id="listNotificationsBtn" class="secondary">GET /notifications</button>
+            <button id="readNotificationBtn" class="warn">PUT /notifications/:id/read</button>
+          </div>
+          <div id="notificationsStatus" class="status"></div>
+        </div>
+      </div>
+
+      <pre id="output">Waiting for action...</pre>
+    </div>
+
+    <script>
+      let imageBase64 = ''
+      let cameraImageBase64 = ''
+      let stream = null
+
+      const output = document.getElementById('output')
+      const baseUrlInput = document.getElementById('baseUrl')
+
+      const setStatus = (id, message, ok) => {
+        const el = document.getElementById(id)
+        if (!el) {
+          writeOutput('UI status target missing', { id, message, ok })
+          return
+        }
+        el.textContent = message
+        el.className = 'status ' + (ok ? 'ok' : 'err')
+      }
+
+      const writeOutput = (title, data) => {
+        output.textContent = title + '\n\n' + JSON.stringify(data, null, 2)
+        output.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+
+      const toJsonOrText = async (response) => {
+        const text = await response.text()
+        try {
+          return JSON.parse(text)
+        } catch {
+          return { raw: text }
+        }
+      }
+
+      const apiRequest = async (label, path, options = {}) => {
+        const response = await fetch(baseUrlInput.value.trim() + path, options)
+        const data = await toJsonOrText(response)
+        writeOutput(label, { status: response.status, data })
+        return { response, data }
+      }
+
+      window.addEventListener('error', (event) => {
+        writeOutput('JavaScript error', {
+          message: event.message,
+          source: event.filename,
+          line: event.lineno,
+          column: event.colno
+        })
+      })
+
+      window.addEventListener('unhandledrejection', (event) => {
+        writeOutput('Unhandled promise rejection', {
+          reason: String(event.reason)
+        })
+      })
+
+      const getHeaders = (isJson = true) => {
+        const token = document.getElementById('token').value.trim()
+        const headers = {}
+        if (isJson) headers['Content-Type'] = 'application/json'
+        if (token) headers.Authorization = 'Bearer ' + token
+        return headers
+      }
+
+      const toDataUrl = (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
+      const fetchImageAsBase64 = async (url) => {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Could not fetch image URL')
+        const blob = await response.blob()
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      }
+
+      const parseCsvIds = (value) => {
+        if (!value.trim()) return []
+        return value
+          .split(',')
+          .map((x) => Number(x.trim()))
+          .filter((x) => Number.isInteger(x) && x > 0)
+      }
+
+      const getTargetUserId = () => {
+        const target = Number(document.getElementById('targetUserId').value)
+        return Number.isInteger(target) && target > 0 ? target : null
+      }
+
+      const resolveImageBySource = async () => {
+        const source = document.getElementById('imageSource').value
+        const fileInput = document.getElementById('imageFile')
+        const url = document.getElementById('imageUrl').value.trim()
+
+        if (source === 'camera') {
+          if (!cameraImageBase64) throw new Error('Camera image not captured yet')
+          return cameraImageBase64
+        }
+
+        if (source === 'file') {
+          if (!fileInput.files[0]) throw new Error('Please choose image file')
+          imageBase64 = await toDataUrl(fileInput.files[0])
+          return imageBase64
+        }
+
+        if (source === 'url') {
+          if (!url) throw new Error('Please provide image URL')
+          imageBase64 = await fetchImageAsBase64(url)
+          return imageBase64
+        }
+
+        if (cameraImageBase64) return cameraImageBase64
+
+        if (fileInput.files[0]) {
+          imageBase64 = await toDataUrl(fileInput.files[0])
+          return imageBase64
+        }
+
+        if (url) {
+          imageBase64 = await fetchImageAsBase64(url)
+          return imageBase64
+        }
+
+        throw new Error('Please capture camera image or choose file or provide image URL')
+      }
+
+      const currentImageUrlOrNull = () => {
+        const url = document.getElementById('imageUrl').value.trim()
+        return url || null
+      }
+
+      const captureFromVideo = () => {
+        const video = document.getElementById('cameraPreview')
+        const canvas = document.getElementById('cameraCanvas')
+        if (!video.videoWidth || !video.videoHeight) {
+          throw new Error('Camera is not ready')
+        }
+
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        cameraImageBase64 = canvas.toDataURL('image/jpeg', 0.9)
+        document.getElementById('capturedPreview').src = cameraImageBase64
+        setStatus('cameraStatus', 'Camera image captured', true)
+      }
+
+      document.getElementById('imageFile').addEventListener('change', async (e) => {
+        try {
+          if (e.target.files[0]) {
+            imageBase64 = await toDataUrl(e.target.files[0])
+            setStatus('imgStatus', 'Image file is ready', true)
+          }
+        } catch (error) {
+          setStatus('imgStatus', error.message, false)
+        }
+      })
+
+      document.getElementById('healthBtn').addEventListener('click', async () => {
+        try {
+          await apiRequest('GET /', '/', { method: 'GET' })
+        } catch (error) {
+          writeOutput('GET / failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('startCameraBtn').addEventListener('click', async () => {
+        try {
+          if (stream) {
+            setStatus('cameraStatus', 'Camera already running', true)
+            return
+          }
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+          document.getElementById('cameraPreview').srcObject = stream
+          setStatus('cameraStatus', 'Camera started', true)
+        } catch (error) {
+          setStatus('cameraStatus', error.message, false)
+        }
+      })
+
+      document.getElementById('captureCameraBtn').addEventListener('click', () => {
+        try {
+          captureFromVideo()
+          setStatus('imgStatus', 'Using camera image', true)
+        } catch (error) {
+          setStatus('cameraStatus', error.message, false)
+        }
+      })
+
+      document.getElementById('stopCameraBtn').addEventListener('click', () => {
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop())
+          stream = null
+          document.getElementById('cameraPreview').srcObject = null
+        }
+        setStatus('cameraStatus', 'Camera stopped', true)
+      })
+
+      document.getElementById('registerBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value.trim(),
+            full_name: document.getElementById('fullName').value.trim(),
+            user_code: document.getElementById('userCode').value.trim()
+          }
+          const { response } = await apiRequest('POST /auth/register', '/auth/register', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('authStatus', response.ok ? 'Register success' : 'Register failed', response.ok)
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('POST /auth/register failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('loginBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value.trim()
+          }
+          const { response, data } = await apiRequest('POST /auth/login', '/auth/login', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          if (data.token) {
+            document.getElementById('token').value = data.token
+            if (data.user?.user_id) {
+              document.getElementById('userId').value = data.user.user_id
+            }
+          }
+          setStatus('authStatus', response.ok ? 'Login success' : 'Login failed', response.ok)
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('POST /auth/login failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('meBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /auth/me', '/auth/me', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('authStatus', response.ok ? 'Loaded /auth/me' : 'Load /auth/me failed', response.ok)
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('GET /auth/me failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('profileBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /auth/profile', '/auth/profile', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('authStatus', response.ok ? 'Loaded /auth/profile' : 'Load /auth/profile failed', response.ok)
+        } catch (error) {
+          setStatus('authStatus', error.message, false)
+          writeOutput('GET /auth/profile failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('registerFaceBtn').addEventListener('click', async () => {
+        try {
+          const img = await resolveImageBySource()
+          const faceImageUrlValue = document.getElementById('faceImageUrl').value.trim() || null
+          const body = { imageBase64: img, face_image_url: faceImageUrlValue }
+          const { response } = await apiRequest('POST /face/register', '/face/register', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('faceStatus', response.ok ? 'Face registered' : 'Face register failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/register failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('verifyFaceBtn').addEventListener('click', async () => {
+        try {
+          const img = await resolveImageBySource()
+          const body = { imageBase64: img, captured_image_url: currentImageUrlOrNull() }
+          const { response } = await apiRequest('POST /face/verify', '/face/verify', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('faceStatus', response.ok ? 'Face verified' : 'Face verify failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/verify failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('compareBtn').addEventListener('click', async () => {
+        try {
+          const img = await resolveImageBySource()
+          const body = { imageBase64: img, captured_image_url: currentImageUrlOrNull() }
+          const { response } = await apiRequest('POST /face/compare', '/face/compare', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('faceStatus', response.ok ? 'Face compared' : 'Face compare failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/compare failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('compareByUserBtn').addEventListener('click', async () => {
+        try {
+          const targetUserId = getTargetUserId()
+          if (!targetUserId) throw new Error('Target User ID is required')
+          const img = await resolveImageBySource()
+          const body = { imageBase64: img, captured_image_url: currentImageUrlOrNull() }
+          const { response } = await apiRequest('POST /face/compare/:user_id', '/face/compare/' + targetUserId, {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('faceStatus', response.ok ? 'Face compared by user_id' : 'Face compare by user failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('POST /face/compare/:user_id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('getFaceProfileBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /face/profile', '/face/profile', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('faceStatus', response.ok ? 'Loaded face profile' : 'Load face profile failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('GET /face/profile failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('getFaceProfileByUserBtn').addEventListener('click', async () => {
+        try {
+          const targetUserId = getTargetUserId()
+          if (!targetUserId) throw new Error('Target User ID is required')
+          const { response } = await apiRequest('GET /face/profile/:user_id', '/face/profile/' + targetUserId, {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus(
+            'faceStatus',
+            response.ok ? 'Loaded face profile by user_id' : 'Load face profile by user failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('GET /face/profile/:user_id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('faceHistoryBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /face/history', '/face/history?limit=20', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('faceStatus', response.ok ? 'Loaded face history' : 'Load face history failed', response.ok)
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('GET /face/history failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('faceHistoryByUserBtn').addEventListener('click', async () => {
+        try {
+          const targetUserId = getTargetUserId()
+          if (!targetUserId) throw new Error('Target User ID is required')
+          const { response } = await apiRequest(
+            'GET /face/history/:user_id',
+            '/face/history/' + targetUserId + '?limit=20',
+            {
+              method: 'GET',
+              headers: getHeaders(false)
+            }
+          )
+          setStatus(
+            'faceStatus',
+            response.ok ? 'Loaded face history by user_id' : 'Load face history by user failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('faceStatus', error.message, false)
+          writeOutput('GET /face/history/:user_id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('createSessionBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            class_id: Number(document.getElementById('classId').value),
+            session_date: document.getElementById('sessionDate').value || new Date().toISOString().split('T')[0],
+            start_time: '08:00:00',
+            end_time: '12:00:00'
+          }
+          const { response, data } = await apiRequest('POST /attendance/session/create', '/attendance/session/create', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          if (data.session?.attendance_session_id) {
+            document.getElementById('sessionId').value = data.session.attendance_session_id
+          }
+          setStatus('attendanceStatus', response.ok ? 'Session created' : 'Create session failed', response.ok)
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('POST /attendance/session/create failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('openSessionBtn').addEventListener('click', async () => {
+        try {
+          const body = { attendance_session_id: Number(document.getElementById('sessionId').value) }
+          const { response } = await apiRequest('POST /attendance/session/open', '/attendance/session/open', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('attendanceStatus', response.ok ? 'Session opened' : 'Open session failed', response.ok)
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('POST /attendance/session/open failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('closeSessionBtn').addEventListener('click', async () => {
+        try {
+          const body = { attendance_session_id: Number(document.getElementById('sessionId').value) }
+          const { response } = await apiRequest('POST /attendance/session/close', '/attendance/session/close', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('attendanceStatus', response.ok ? 'Session closed' : 'Close session failed', response.ok)
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('POST /attendance/session/close failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('scanBtn').addEventListener('click', async () => {
+        try {
+          const img = await resolveImageBySource()
+          const body = {
+            imageBase64: img,
+            attendance_session_id: Number(document.getElementById('sessionId').value),
+            captured_image_url: currentImageUrlOrNull()
+          }
+          const { response } = await apiRequest('POST /attendance/scan', '/attendance/scan', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus(
+            'attendanceStatus',
+            response.ok ? 'Attendance scanned successfully' : 'Attendance scan failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('POST /attendance/scan failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('listSessionsBtn').addEventListener('click', async () => {
+        try {
+          const classId = Number(document.getElementById('classId').value)
+          const { response } = await apiRequest(
+            'GET /attendance/session/list',
+            '/attendance/session/list?class_id=' + classId,
+            {
+              method: 'GET',
+              headers: getHeaders(false)
+            }
+          )
+          setStatus('attendanceStatus', response.ok ? 'Sessions loaded' : 'Load sessions failed', response.ok)
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('GET /attendance/session/list failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('sessionDetailsBtn').addEventListener('click', async () => {
+        try {
+          const sessionId = Number(document.getElementById('sessionId').value)
+          const { response } = await apiRequest('GET /attendance/session/:id', '/attendance/session/' + sessionId, {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus(
+            'attendanceStatus',
+            response.ok ? 'Session details loaded' : 'Load session details failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('attendanceStatus', error.message, false)
+          writeOutput('GET /attendance/session/:id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('classesListBtn').addEventListener('click', async () => {
+        try {
+          const { response, data } = await apiRequest('GET /classes', '/classes', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          if (response.ok && data?.data?.[0]?.class_id) {
+            document.getElementById('classId').value = data.data[0].class_id
+            document.getElementById('classDetailsId').value = data.data[0].class_id
+          }
+          setStatus('classesStatus', response.ok ? 'Classes loaded' : 'Load classes failed', response.ok)
+        } catch (error) {
+          setStatus('classesStatus', error.message, false)
+          writeOutput('GET /classes failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('createClassBtn').addEventListener('click', async () => {
+        try {
+          const teacherIdRaw = document.getElementById('teacherId').value.trim()
+          const body = {
+            class_name: document.getElementById('className').value.trim(),
+            teacher_id: teacherIdRaw ? Number(teacherIdRaw) : null,
+            student_ids: parseCsvIds(document.getElementById('studentIds').value)
+          }
+          const { response, data } = await apiRequest('POST /classes', '/classes', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          if (response.ok && data?.data?.class_id) {
+            document.getElementById('classId').value = data.data.class_id
+            document.getElementById('classDetailsId').value = data.data.class_id
+          }
+          setStatus('classesStatus', response.ok ? 'Class created' : 'Create class failed', response.ok)
+        } catch (error) {
+          setStatus('classesStatus', error.message, false)
+          writeOutput('POST /classes failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('classByIdBtn').addEventListener('click', async () => {
+        try {
+          const classId = Number(document.getElementById('classDetailsId').value)
+          const { response } = await apiRequest('GET /classes/:id', '/classes/' + classId, {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('classesStatus', response.ok ? 'Class detail loaded' : 'Load class detail failed', response.ok)
+        } catch (error) {
+          setStatus('classesStatus', error.message, false)
+          writeOutput('GET /classes/:id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('classStudentsBtn').addEventListener('click', async () => {
+        try {
+          const classId = Number(document.getElementById('classDetailsId').value)
+          const { response } = await apiRequest('GET /classes/:id/students', '/classes/' + classId + '/students', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('classesStatus', response.ok ? 'Class students loaded' : 'Load class students failed', response.ok)
+        } catch (error) {
+          setStatus('classesStatus', error.message, false)
+          writeOutput('GET /classes/:id/students failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('createUserBtn').addEventListener('click', async () => {
+        try {
+          const body = {
+            email: document.getElementById('newUserEmail').value.trim(),
+            password: document.getElementById('newUserPassword').value.trim(),
+            full_name: document.getElementById('newUserFullName').value.trim(),
+            user_code: document.getElementById('newUserCode').value.trim(),
+            class_id: Number(document.getElementById('updateUserClassId').value) || null,
+            role_name: document.getElementById('newUserRole').value
+          }
+          const { response, data } = await apiRequest('POST /users', '/users', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          if (response.ok && data?.user?.user_id) {
+            document.getElementById('manageUserId').value = data.user.user_id
+          }
+          setStatus('usersStatus', response.ok ? 'User created' : 'Create user failed', response.ok)
+        } catch (error) {
+          setStatus('usersStatus', error.message, false)
+          writeOutput('POST /users failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('listUsersBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /users', '/users', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('usersStatus', response.ok ? 'Users loaded' : 'Load users failed', response.ok)
+        } catch (error) {
+          setStatus('usersStatus', error.message, false)
+          writeOutput('GET /users failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('getUserByIdBtn').addEventListener('click', async () => {
+        try {
+          const userId = Number(document.getElementById('manageUserId').value)
+          const { response } = await apiRequest('GET /users/:id', '/users/' + userId, {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus('usersStatus', response.ok ? 'User loaded' : 'Load user failed', response.ok)
+        } catch (error) {
+          setStatus('usersStatus', error.message, false)
+          writeOutput('GET /users/:id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('updateUserBtn').addEventListener('click', async () => {
+        try {
+          const userId = Number(document.getElementById('manageUserId').value)
+          const body = {
+            full_name: document.getElementById('updateUserName').value.trim(),
+            class_id: Number(document.getElementById('updateUserClassId').value) || null,
+            user_status: document.getElementById('updateUserStatus').value
+          }
+          const { response } = await apiRequest('PUT /users/:id', '/users/' + userId, {
+            method: 'PUT',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('usersStatus', response.ok ? 'User updated' : 'Update user failed', response.ok)
+        } catch (error) {
+          setStatus('usersStatus', error.message, false)
+          writeOutput('PUT /users/:id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('deleteUserBtn').addEventListener('click', async () => {
+        try {
+          const userId = Number(document.getElementById('manageUserId').value)
+          const { response } = await apiRequest('DELETE /users/:id', '/users/' + userId, {
+            method: 'DELETE',
+            headers: getHeaders(false)
+          })
+          setStatus('usersStatus', response.ok ? 'User deleted' : 'Delete user failed', response.ok)
+        } catch (error) {
+          setStatus('usersStatus', error.message, false)
+          writeOutput('DELETE /users/:id failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('listNotificationsBtn').addEventListener('click', async () => {
+        try {
+          const { response } = await apiRequest('GET /notifications', '/notifications', {
+            method: 'GET',
+            headers: getHeaders(false)
+          })
+          setStatus(
+            'notificationsStatus',
+            response.ok ? 'Notifications loaded' : 'Load notifications failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('notificationsStatus', error.message, false)
+          writeOutput('GET /notifications failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('readNotificationBtn').addEventListener('click', async () => {
+        try {
+          const notificationId = Number(document.getElementById('notificationId').value)
+          const { response } = await apiRequest(
+            'PUT /notifications/:id/read',
+            '/notifications/' + notificationId + '/read',
+            {
+              method: 'PUT',
+              headers: getHeaders(false)
+            }
+          )
+          setStatus(
+            'notificationsStatus',
+            response.ok ? 'Notification marked as read' : 'Mark read failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('notificationsStatus', error.message, false)
+          writeOutput('PUT /notifications/:id/read failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('compareCameraBtn').addEventListener('click', async () => {
+        try {
+          captureFromVideo()
+          const body = { imageBase64: cameraImageBase64, captured_image_url: currentImageUrlOrNull() }
+          const { response } = await apiRequest('POST /face/compare (camera)', '/face/compare', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus('cameraStatus', response.ok ? 'Camera compare success' : 'Camera compare failed', response.ok)
+        } catch (error) {
+          setStatus('cameraStatus', error.message, false)
+          writeOutput('POST /face/compare (camera) failed', { error: error.message })
+        }
+      })
+
+      document.getElementById('scanCameraBtn').addEventListener('click', async () => {
+        try {
+          captureFromVideo()
+          const body = {
+            imageBase64: cameraImageBase64,
+            attendance_session_id: Number(document.getElementById('sessionId').value),
+            captured_image_url: currentImageUrlOrNull()
+          }
+          const { response } = await apiRequest('POST /attendance/scan (camera)', '/attendance/scan', {
+            method: 'POST',
+            headers: getHeaders(true),
+            body: JSON.stringify(body)
+          })
+          setStatus(
+            'cameraStatus',
+            response.ok ? 'Camera scan attendance success' : 'Camera scan attendance failed',
+            response.ok
+          )
+        } catch (error) {
+          setStatus('cameraStatus', error.message, false)
+          writeOutput('POST /attendance/scan (camera) failed', { error: error.message })
+        }
+      })
+
+      const today = new Date().toISOString().split('T')[0]
+      document.getElementById('sessionDate').value = today
+    </script>
+  </body>
+</html>
