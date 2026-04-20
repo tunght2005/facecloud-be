@@ -13,10 +13,13 @@ app.use(express.urlencoded({ extended: true })) // Phân tích data từ form (a
 // 2. Định nghĩa các Routes (Tạm thời comment lại, chúng ta sẽ mở ra ở Giai đoạn sau)
 const authRoutes = require('./routes/auth.routes')
 const userRoutes = require('./routes/user.routes')
+const classRoutes = require('./routes/class.routes');
+const attendanceRoutes = require('./routes/attendance.routes');
 
 app.use('/auth', authRoutes)
 app.use('/users', userRoutes)
-
+app.use('/classes', classRoutes);
+app.use('/attendance', attendanceRoutes);
 // 3. Các API test mặc định
 app.get('/', (req, res) => {
   res.send('FaceCloud Server is running...')
