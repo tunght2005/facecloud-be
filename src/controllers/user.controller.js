@@ -19,6 +19,32 @@ const getAllUsers = async (req, res) => {
   }
 }
 
+// 1.1 Lấy chi tiết 1 user theo ID (Chỉ dành cho Admin)
+const getUserById = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const result = await pool.query(
+      `SELECT u.user_id, u.user_code, u.email, u.full_name, u.avatar_url, u.class_id, u.user_status, u.created_at,
+              array_remove(array_agg(r.role_name), NULL) as roles
+       FROM users u
+       LEFT JOIN user_roles ur ON u.user_id = ur.user_id
+       LEFT JOIN roles r ON ur.role_id = r.role_id
+       WHERE u.user_id = $1
+       GROUP BY u.user_id`,
+      [id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy người dùng' })
+    }
+
+    return res.json(result.rows[0])
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+}
+
 // 2. Cập nhật thông tin user (Ví dụ: Gán class_id cho sinh viên)
 const updateUser = async (req, res) => {
   try {
@@ -39,7 +65,6 @@ const updateUser = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
-
 
 // 3. Tạo người dùng mới (Dành cho Admin hoặc để Khởi tạo dữ liệu)
 const createUser = async (req, res) => {
@@ -91,15 +116,15 @@ const deleteUser = async (req, res) => {
   try {
     const { id } = req.params
     const result = await pool.query('DELETE FROM users WHERE user_id = $1 RETURNING user_id', [id])
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Không tìm thấy người dùng để xóa' })
     }
-    
+
     res.json({ message: 'Xóa người dùng thành công', deleted_id: result.rows[0].user_id })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 }
 
-module.exports = { getAllUsers, updateUser, createUser, deleteUser }
+module.exports = { getAllUsers, getUserById, updateUser, createUser, deleteUser }

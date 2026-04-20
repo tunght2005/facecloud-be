@@ -25,13 +25,25 @@ const requireAuth = (req, res, next) => {
   }
 }
 
-// Middleware 2: Kiểm tra xem người dùng có quyền (role) cụ thể hay không
-const requireRole = (requiredRole) => {
+// Middleware 2: Kiểm tra xem người dùng có thuộc một trong các quyền (roles) yêu cầu hay không
+const requireRole = (...requiredRoles) => {
   return (req, res, next) => {
     // req.user đã được gán từ middleware requireAuth trước đó
-    if (!req.user || !req.user.roles || !req.user.roles.includes(requiredRole)) {
-      return res.status(403).json({ error: `Forbidden: API này yêu cầu quyền [${requiredRole}]` })
+    if (!req.user || !Array.isArray(req.user.roles)) {
+      return res.status(403).json({ error: 'Forbidden: Không có thông tin quyền truy cập' })
     }
+
+    if (!requiredRoles.length) {
+      return next()
+    }
+
+    const allowed = requiredRoles.some((role) => req.user.roles.includes(role))
+    if (!allowed) {
+      return res
+        .status(403)
+        .json({ error: `Forbidden: API này yêu cầu một trong các quyền [${requiredRoles.join(', ')}]` })
+    }
+
     next()
   }
 }
