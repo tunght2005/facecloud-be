@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS face_profiles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ALTER TABLE face_profiles ADD COLUMN IF NOT EXISTS aws_collection_id VARCHAR(255);
+ALTER TABLE face_profiles ADD COLUMN IF NOT EXISTS face_image_url TEXT;
 CREATE INDEX IF NOT EXISTS idx_face_profiles_user_id ON face_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_face_profiles_face_aws_id ON face_profiles(face_aws_id);
 

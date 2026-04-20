@@ -1,9 +1,9 @@
 {
   "info": {
     "_postman_id": "2f8d5d71-3f2e-4c2d-b9f3-1b4fddecb35d",
-    "name": "FaceCloud BE APIs",
+    "name": "FaceCloud BE APIs (Complete)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Collection for FaceCloud backend: auth, face register/verify, attendance scan"
+    "description": "Complete FaceCloud Backend API Collection - All 28+ Endpoints"
   },
   "variable": [
     {
@@ -15,187 +15,310 @@
       "value": ""
     },
     {
-      "key": "attendanceSessionId",
+      "key": "userId",
       "value": "1"
     },
     {
-      "key": "imageBase64",
-      "value": "data:image/jpeg;base64,PASTE_YOUR_BASE64_IMAGE_HERE"
+      "key": "classId",
+      "value": "1"
+    },
+    {
+      "key": "sessionId",
+      "value": "1"
+    },
+    {
+      "key": "notificationId",
+      "value": "1"
     }
   ],
   "item": [
     {
-      "name": "Auth",
+      "name": "1. Authentication",
       "item": [
         {
-          "name": "Register",
+          "name": "POST /auth/register",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"student01@example.com\",\n  \"password\": \"123456\",\n  \"full_name\": \"Student Demo\",\n  \"user_code\": \"SV001\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"123456\",\n  \"full_name\": \"Student Name\",\n  \"user_code\": \"SV001\"\n}"},
+            "url": {"raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"]}
+          }
         },
         {
-          "name": "Login (Save Token)",
+          "name": "POST /auth/login",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"student01@example.com\",\n  \"password\": \"123456\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
-            }
-          },
-          "event": [
-            {
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"superadmin@gmail.com\",\n  \"password\": \"123456\"\n}"},
+            "url": {"raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"]},
+            "event": [{
               "listen": "test",
               "script": {
-                "exec": [
-                  "pm.test('Status is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "const json = pm.response.json();",
-                  "if (json && json.token) {",
-                  "    pm.collectionVariables.set('token', json.token);",
-                  "}"
-                ],
+                "exec": ["pm.test('Status is 200', function () { pm.response.to.have.status(200); });", "const json = pm.response.json();", "if (json && json.token) { pm.collectionVariables.set('token', json.token); }"],
                 "type": "text/javascript"
               }
-            }
-          ],
-          "response": []
+            }]
+          }
         },
         {
-          "name": "Get Me",
+          "name": "GET /auth/me",
           "request": {
             "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Face",
-      "item": [
-        {
-          "name": "Face Register",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"imageBase64\": \"{{imageBase64}}\",\n  \"face_image_url\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/face/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["face", "register"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"]}
+          }
         },
         {
-          "name": "Face Verify",
+          "name": "GET /auth/profile",
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"imageBase64\": \"{{imageBase64}}\",\n  \"captured_image_url\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/face/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["face", "verify"]
-            }
-          },
-          "response": []
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/auth/profile", "host": ["{{baseUrl}}"], "path": ["auth", "profile"]}
+          }
         }
       ]
     },
     {
-      "name": "Attendance",
+      "name": "2. Users (Admin Only)",
       "item": [
         {
-          "name": "Attendance Scan",
+          "name": "POST /users",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"imageBase64\": \"{{imageBase64}}\",\n  \"attendance_session_id\": {{attendanceSessionId}},\n  \"captured_image_url\": null\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/attendance/scan",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance", "scan"]
-            }
-          },
-          "response": []
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"teacher@example.com\",\n  \"password\": \"123456\",\n  \"full_name\": \"Teacher Name\",\n  \"user_code\": \"GV001\",\n  \"role_name\": \"teacher\"\n}"},
+            "url": {"raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"]}
+          }
+        },
+        {
+          "name": "GET /users",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"]}
+          }
+        },
+        {
+          "name": "GET /users/:id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"]}
+          }
+        },
+        {
+          "name": "PUT /users/:id",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"full_name\": \"Updated Name\",\n  \"class_id\": 1,\n  \"user_status\": \"active\"\n}"},
+            "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"]}
+          }
+        },
+        {
+          "name": "DELETE /users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Classes",
+      "item": [
+        {
+          "name": "GET /classes",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/classes", "host": ["{{baseUrl}}"], "path": ["classes"]}
+          }
+        },
+        {
+          "name": "POST /classes",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"class_name\": \"Lop ReactJS K1\",\n  \"teacher_id\": 2,\n  \"student_ids\": [4, 5]\n}"},
+            "url": {"raw": "{{baseUrl}}/classes", "host": ["{{baseUrl}}"], "path": ["classes"]}
+          }
+        },
+        {
+          "name": "GET /classes/:id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/classes/{{classId}}", "host": ["{{baseUrl}}"], "path": ["classes", "{{classId}}"]}
+          }
+        },
+        {
+          "name": "GET /classes/:id/students",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/classes/{{classId}}/students", "host": ["{{baseUrl}}"], "path": ["classes", "{{classId}}", "students"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Face Recognition",
+      "item": [
+        {
+          "name": "POST /face/register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\",\n  \"face_image_url\": \"https://example.com/face.jpg\"\n}"},
+            "url": {"raw": "{{baseUrl}}/face/register", "host": ["{{baseUrl}}"], "path": ["face", "register"]}
+          }
+        },
+        {
+          "name": "GET /face/profile",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/face/profile", "host": ["{{baseUrl}}"], "path": ["face", "profile"]}
+          }
+        },
+        {
+          "name": "GET /face/profile/:user_id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/face/profile/{{userId}}", "host": ["{{baseUrl}}"], "path": ["face", "profile", "{{userId}}"]}
+          }
+        },
+        {
+          "name": "POST /face/verify",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\",\n  \"captured_image_url\": \"https://example.com/captured.jpg\"\n}"},
+            "url": {"raw": "{{baseUrl}}/face/verify", "host": ["{{baseUrl}}"], "path": ["face", "verify"]}
+          }
+        },
+        {
+          "name": "POST /face/compare",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\",\n  \"captured_image_url\": \"https://example.com/captured.jpg\"\n}"},
+            "url": {"raw": "{{baseUrl}}/face/compare", "host": ["{{baseUrl}}"], "path": ["face", "compare"]}
+          }
+        },
+        {
+          "name": "POST /face/compare/:user_id",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\",\n  \"captured_image_url\": \"https://example.com/captured.jpg\"\n}"},
+            "url": {"raw": "{{baseUrl}}/face/compare/{{userId}}", "host": ["{{baseUrl}}"], "path": ["face", "compare", "{{userId}}"]}
+          }
+        },
+        {
+          "name": "GET /face/history",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/face/history?limit=20", "host": ["{{baseUrl}}"], "path": ["face", "history"], "query": [{"key": "limit", "value": "20"}]}
+          }
+        },
+        {
+          "name": "GET /face/history/:user_id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/face/history/{{userId}}?limit=20", "host": ["{{baseUrl}}"], "path": ["face", "history", "{{userId}}"], "query": [{"key": "limit", "value": "20"}]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Attendance Sessions",
+      "item": [
+        {
+          "name": "POST /attendance/session/create",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"class_id\": 1,\n  \"session_date\": \"2026-04-21\",\n  \"start_time\": \"08:00:00\",\n  \"end_time\": \"12:00:00\"\n}"},
+            "url": {"raw": "{{baseUrl}}/attendance/session/create", "host": ["{{baseUrl}}"], "path": ["attendance", "session", "create"]}
+          }
+        },
+        {
+          "name": "GET /attendance/session/list",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/attendance/session/list?class_id=1&status=open", "host": ["{{baseUrl}}"], "path": ["attendance", "session", "list"], "query": [{"key": "class_id", "value": "1"}, {"key": "status", "value": "open"}]}
+          }
+        },
+        {
+          "name": "GET /attendance/session/:id",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/attendance/session/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["attendance", "session", "{{sessionId}}"]}
+          }
+        },
+        {
+          "name": "POST /attendance/session/open",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"attendance_session_id\": {{sessionId}}\n}"},
+            "url": {"raw": "{{baseUrl}}/attendance/session/open", "host": ["{{baseUrl}}"], "path": ["attendance", "session", "open"]}
+          }
+        },
+        {
+          "name": "POST /attendance/session/close",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"attendance_session_id\": {{sessionId}}\n}"},
+            "url": {"raw": "{{baseUrl}}/attendance/session/close", "host": ["{{baseUrl}}"], "path": ["attendance", "session", "close"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Attendance Scan",
+      "item": [
+        {
+          "name": "POST /attendance/scan",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {"mode": "raw", "raw": "{\n  \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQ...\",\n  \"attendance_session_id\": {{sessionId}},\n  \"captured_image_url\": \"https://example.com/checkin.jpg\"\n}"},
+            "url": {"raw": "{{baseUrl}}/attendance/scan", "host": ["{{baseUrl}}"], "path": ["attendance", "scan"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Notifications",
+      "item": [
+        {
+          "name": "GET /notifications",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/notifications", "host": ["{{baseUrl}}"], "path": ["notifications"]}
+          }
+        },
+        {
+          "name": "PUT /notifications/:id/read",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/notifications/{{notificationId}}/read", "host": ["{{baseUrl}}"], "path": ["notifications", "{{notificationId}}", "read"]}
+          }
         }
       ]
     }
   ]
 }
+

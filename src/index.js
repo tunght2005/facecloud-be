@@ -12,22 +12,17 @@ app.use(express.json({ limit: '10mb' })) // Cho phép payload ảnh base64 khi t
 app.use(express.urlencoded({ extended: true, limit: '10mb' })) // Cho phép payload lớn từ form/urlencoded
 app.use(express.static(path.join(__dirname, '../public')))
 
-// 2. Định nghĩa các Routes (Tạm thời comment lại, chúng ta sẽ mở ra ở Giai đoạn sau)
+// 2. Định nghĩa các Routes
 const authRoutes = require('./routes/auth.routes')
 const userRoutes = require('./routes/user.routes')
-const classRoutes = require('./routes/class.routes');
-const attendanceRoutes = require('./routes/attendance.routes');
-
-app.use('/auth', authRoutes)
-app.use('/users', userRoutes)
-app.use('/classes', classRoutes);
-app.use('/attendance', attendanceRoutes);
+const classRoutes = require('./routes/class.routes')
+const attendanceRoutes = require('./routes/attendance.routes')
 const notificationRoutes = require('./routes/notification.routes')
 const faceRoutes = require('./routes/face.routes')
-const attendanceRoutes = require('./routes/attendance.routes')
 
 app.use('/auth', authRoutes)
 app.use('/users', userRoutes)
+app.use('/classes', classRoutes)
 app.use('/notifications', notificationRoutes)
 app.use('/face', faceRoutes)
 app.use('/attendance', attendanceRoutes)

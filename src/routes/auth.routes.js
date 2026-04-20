@@ -9,5 +9,6 @@ router.post('/login', authController.login)
 
 // Các API bắt buộc phải có token (gắn middleware requireAuth)
 router.get('/me', requireAuth, authController.getMe)
+router.get('/profile', requireAuth, authController.getMe)
 
 module.exports = router

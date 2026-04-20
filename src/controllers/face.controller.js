@@ -23,6 +23,32 @@ const resolveMatchedUserId = async (match) => {
   return result.rows[0].user_id
 }
 
+// ===== LẤY PROFILE KHUÔN MẶT =====
+
+const getFaceProfile = async (req, res) => {
+  try {
+    const userId = req.params.user_id || req.user.user_id
+
+    const result = await pool.query(
+      `SELECT user_id, face_aws_id, aws_collection_id, face_image_url, created_at 
+       FROM face_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Chưa đăng ký khuôn mặt' })
+    }
+
+    return res.json({
+      face_profile: result.rows[0]
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+// ===== ĐĂNG KÝ KHUÔN MẶT =====
+
 const registerFace = async (req, res) => {
   try {
     const userId = req.user.user_id
@@ -124,8 +150,129 @@ const verifyFace = async (req, res) => {
   }
 }
 
+// ===== SO SÁNH KHUÔN MẶT CHI TIẾT =====
+
+const compareFace = async (req, res) => {
+  try {
+    const userId = req.params.user_id || req.user.user_id
+    const { imageBase64, captured_image_url } = req.body
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 là bắt buộc' })
+    }
+
+    // Lấy ảnh khuôn mặt đã đăng ký
+    const profileResult = await pool.query(`SELECT face_aws_id, face_image_url FROM face_profiles WHERE user_id = $1`, [
+      userId
+    ])
+
+    if (profileResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User này chưa đăng ký khuôn mặt' })
+    }
+
+    const registeredFace = profileResult.rows[0]
+
+    // Tìm khuôn mặt trong ảnh chụp
+    const matches = await searchByImage({
+      imageBase64,
+      maxFaces: 5,
+      faceMatchThreshold: 60 // Lower threshold để lấy nhiều kết quả
+    })
+
+    // Chỉ chấp nhận match thuộc đúng user đang so sánh.
+    // Trước đây fallback sang matches[0] có thể lấy nhầm người khác và tạo false-positive.
+    const userMatches = matches.filter((match) => {
+      const externalId = match?.Face?.ExternalImageId
+      const faceId = match?.Face?.FaceId
+      return externalId === String(userId) || (registeredFace.face_aws_id && faceId === registeredFace.face_aws_id)
+    })
+
+    const bestUserMatch = userMatches[0] || null
+    const topAnyMatch = matches[0] || null
+    const topAnyMatchedUserId = topAnyMatch ? await resolveMatchedUserId(topAnyMatch) : null
+    const similarity = bestUserMatch ? Number(bestUserMatch.Similarity || 0) : 0
+    const isMatch = Boolean(bestUserMatch) && similarity >= DEFAULT_MATCH_THRESHOLD
+
+    // Lưu log
+    await pool.query(
+      `INSERT INTO face_verification_logs
+       (user_id, captured_image_url, matched_face_aws_id, similarity_score, verification_status)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        userId,
+        captured_image_url || null,
+        bestUserMatch?.Face?.FaceId || null,
+        similarity,
+        isMatch ? 'success' : 'failed'
+      ]
+    )
+
+    return res.json({
+      user_id: userId,
+      comparison: {
+        is_match: isMatch,
+        similarity: similarity,
+        threshold: DEFAULT_MATCH_THRESHOLD,
+        matched_face_id: bestUserMatch?.Face?.FaceId || null,
+        confidence: bestUserMatch?.Confidence || null
+      },
+      registered_face: {
+        face_aws_id: registeredFace.face_aws_id,
+        face_image_url: registeredFace.face_image_url
+      },
+      top_match_debug: {
+        matched_user_id: topAnyMatchedUserId,
+        similarity: topAnyMatch ? Number(topAnyMatch.Similarity || 0) : 0,
+        face_id: topAnyMatch?.Face?.FaceId || null,
+        external_id: topAnyMatch?.Face?.ExternalImageId || null
+      },
+      all_matches: matches.map((m) => ({
+        face_id: m.Face?.FaceId,
+        similarity: Number(m.Similarity || 0),
+        confidence: m.Confidence,
+        external_id: m.Face?.ExternalImageId
+      }))
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+// ===== LẤY LỊCH SỬ VERIFICATION =====
+
+const getFaceVerificationHistory = async (req, res) => {
+  try {
+    const userId = req.params.user_id || req.user.user_id
+    const limit = req.query.limit || 20
+
+    const result = await pool.query(
+      `SELECT 
+        verification_id, user_id, captured_image_url, matched_face_aws_id, 
+        similarity_score, verification_status, created_at
+       FROM face_verification_logs
+       WHERE user_id = $1 OR matched_face_aws_id IN (
+         SELECT face_aws_id FROM face_profiles WHERE user_id = $1
+       )
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    )
+
+    return res.json({
+      user_id: userId,
+      logs: result.rows,
+      total: result.rows.length
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
 module.exports = {
+  getFaceProfile,
   registerFace,
   verifyFace,
+  compareFace,
+  getFaceVerificationHistory,
   resolveMatchedUserId
 }
