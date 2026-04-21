@@ -1,5 +1,6 @@
 const { pool } = require('../config/db')
 const { indexFace, searchByImage, deleteFaces } = require('../services/rekognition.service')
+const { writeAuditLog } = require('../utils/audit-log')
 
 const DEFAULT_MATCH_THRESHOLD = Number(process.env.FACE_MATCH_THRESHOLD || 85)
 const AWS_COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION_ID || 'facecloud-users'
@@ -23,6 +24,24 @@ const resolveMatchedUserId = async (match) => {
   return result.rows[0].user_id
 }
 
+const buildUploadUrl = (req, filePath) => {
+  if (!filePath) {
+    return null
+  }
+
+  const normalizedPath = String(filePath).replace(/\\/g, '/')
+  const marker = 'uploads/'
+  const markerIndex = normalizedPath.lastIndexOf(marker)
+
+  if (markerIndex === -1) {
+    // Nếu không tìm thấy uploads/, thử lấy tên file cuối cùng và giả định nó trong uploads
+    const filename = normalizedPath.split('/').pop()
+    return `/uploads/${filename}`
+  }
+
+  return '/' + normalizedPath.slice(markerIndex)
+}
+
 // ===== LẤY PROFILE KHUÔN MẶT =====
 
 const getFaceProfile = async (req, res) => {
@@ -30,17 +49,23 @@ const getFaceProfile = async (req, res) => {
     const userId = req.params.user_id || req.user.user_id
 
     const result = await pool.query(
-      `SELECT user_id, face_aws_id, aws_collection_id, face_image_url, created_at 
-       FROM face_profiles WHERE user_id = $1 LIMIT 1`,
+      `SELECT fp.user_id, fp.face_aws_id, fp.aws_collection_id, fp.face_image_url, fp.created_at,
+              u.can_update_face
+       FROM face_profiles fp
+       JOIN users u ON fp.user_id = u.user_id
+       WHERE fp.user_id = $1 LIMIT 1`,
       [userId]
     )
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Chưa đăng ký khuôn mặt' })
+      // Nếu chưa có profile, check xem user có tồn tại không để lấy can_update_face (mặc định TRUE cho lần đầu?)
+      // Thực ra nếu chưa có profile thì luôn cho đăng ký.
+      return res.status(404).json({ error: 'Chưa đăng ký khuôn mặt', has_profile: false })
     }
 
     return res.json({
-      face_profile: result.rows[0]
+      face_profile: result.rows[0],
+      has_profile: true
     })
   } catch (error) {
     return res.status(500).json({ error: error.message })
@@ -56,6 +81,16 @@ const registerFace = async (req, res) => {
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 là bắt buộc' })
+    }
+
+    // Kiểm tra xem đã có profile chưa và có quyền cập nhật không
+    const userCheck = await pool.query('SELECT can_update_face FROM users WHERE user_id = $1', [userId])
+    const existingProfile = await pool.query('SELECT face_profile_id FROM face_profiles WHERE user_id = $1', [userId])
+
+    if (existingProfile.rows.length > 0 && !userCheck.rows[0]?.can_update_face) {
+      return res.status(403).json({
+        error: 'Bạn đã đăng ký khuôn mặt rồi. Vui lòng liên hệ quản trị viên để yêu cầu cập nhật lại.'
+      })
     }
 
     // Xóa mặt cũ trong collection để tránh một user có nhiều vector khuôn mặt không cần thiết
@@ -85,6 +120,19 @@ const registerFace = async (req, res) => {
        RETURNING *`,
       [userId, indexResult.faceId, AWS_COLLECTION_ID, face_image_url || null]
     )
+
+    // Sau khi cập nhật thành công, reset flag can_update_face về false
+    await pool.query('UPDATE users SET can_update_face = FALSE WHERE user_id = $1', [userId])
+
+    await writeAuditLog({
+      userId,
+      actionName: 'face.register',
+      actionData: {
+        user_id: userId,
+        face_aws_id: indexResult.faceId,
+        face_image_url: face_image_url || null
+      }
+    })
 
     return res.status(201).json({
       message: 'Đăng ký khuôn mặt thành công',
@@ -121,6 +169,15 @@ const verifyFace = async (req, res) => {
         [null, captured_image_url || null, null, 0, 'failed']
       )
 
+      await writeAuditLog({
+        userId: req.user?.user_id,
+        actionName: 'face.verify.failed',
+        actionData: {
+          reason: 'no_match',
+          captured_image_url: captured_image_url || null
+        }
+      })
+
       return res.status(401).json({
         verified: false,
         message: 'Không xác thực được khuôn mặt'
@@ -137,6 +194,16 @@ const verifyFace = async (req, res) => {
        VALUES ($1, $2, $3, $4, $5)`,
       [matchedUserId, captured_image_url || null, bestMatch?.Face?.FaceId || null, similarity, 'success']
     )
+
+    await writeAuditLog({
+      userId: req.user?.user_id,
+      actionName: 'face.verify.success',
+      actionData: {
+        matched_user_id: matchedUserId,
+        similarity,
+        captured_image_url: captured_image_url || null
+      }
+    })
 
     return res.json({
       verified: true,
@@ -207,6 +274,16 @@ const compareFace = async (req, res) => {
       ]
     )
 
+    await writeAuditLog({
+      userId: req.user?.user_id,
+      actionName: isMatch ? 'face.compare.success' : 'face.compare.failed',
+      actionData: {
+        target_user_id: Number(userId),
+        similarity,
+        captured_image_url: captured_image_url || null
+      }
+    })
+
     return res.json({
       user_id: userId,
       comparison: {
@@ -268,11 +345,97 @@ const getFaceVerificationHistory = async (req, res) => {
   }
 }
 
+const uploadFaceImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Thiếu file ảnh' })
+    }
+
+    const imageUrl = buildUploadUrl(req, req.file.path)
+    if (!imageUrl) {
+      return res.status(500).json({ error: 'Không tạo được URL ảnh upload' })
+    }
+
+    await writeAuditLog({
+      userId: req.user?.user_id,
+      actionName: 'file.upload',
+      actionData: {
+        type: req.query.type === 'captured' ? 'captured' : 'face',
+        image_url: imageUrl
+      }
+    })
+
+    return res.status(201).json({
+      message: 'Upload ảnh thành công',
+      image_url: imageUrl
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+const getUsersFaceStatus = async (req, res) => {
+  try {
+    const { q, page = 1, limit = 10 } = req.query
+    const offset = (page - 1) * limit
+    const params = []
+    let whereClause = "WHERE r.role_name = 'student'"
+
+    if (q) {
+      whereClause += ` AND (u.full_name ILIKE $${params.length + 1} OR u.email ILIKE $${params.length + 1} OR u.user_code ILIKE $${params.length + 1})`
+      params.push(`%${q}%`)
+    }
+
+    const query = `
+      SELECT u.user_id, u.full_name, u.email, u.user_code, u.can_update_face,
+             fp.face_profile_id IS NOT NULL as has_face,
+             fp.created_at as face_registered_at,
+             count(*) OVER() AS total_count
+      FROM users u
+      LEFT JOIN face_profiles fp ON u.user_id = fp.user_id
+      JOIN user_roles ur ON u.user_id = ur.user_id
+      JOIN roles r ON ur.role_id = r.role_id
+      ${whereClause}
+      ORDER BY u.full_name ASC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `
+    params.push(limit, offset)
+
+    const result = await pool.query(query, params)
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0
+
+    return res.json({
+      users: result.rows,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit)
+      }
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+const toggleFaceUpdatePermission = async (req, res) => {
+  try {
+    const { user_id, can_update } = req.body
+    await pool.query('UPDATE users SET can_update_face = $1 WHERE user_id = $2', [can_update, user_id])
+    return res.json({ message: 'Cập nhật quyền thành công' })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
 module.exports = {
   getFaceProfile,
   registerFace,
   verifyFace,
   compareFace,
   getFaceVerificationHistory,
-  resolveMatchedUserId
+  resolveMatchedUserId,
+  uploadFaceImage,
+  getUsersFaceStatus,
+  toggleFaceUpdatePermission
 }

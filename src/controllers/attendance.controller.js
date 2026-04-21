@@ -1,6 +1,7 @@
 const { pool } = require('../config/db')
 const { searchByImage } = require('../services/rekognition.service')
 const { resolveMatchedUserId } = require('./face.controller')
+const { writeAuditLog } = require('../utils/audit-log')
 
 const DEFAULT_MATCH_THRESHOLD = Number(process.env.FACE_MATCH_THRESHOLD || 85)
 
@@ -37,6 +38,8 @@ const createSession = async (req, res) => {
   try {
     const { class_id, session_date, start_time, end_time } = req.body
     const created_by = req.user.user_id
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
 
     if (!class_id || !session_date) {
       return res.status(400).json({ error: 'class_id và session_date là bắt buộc' })
@@ -55,9 +58,15 @@ const createSession = async (req, res) => {
       return res.status(400).json({ error: validationError.message })
     }
 
-    const classResult = await pool.query('SELECT class_id FROM classes WHERE class_id = $1 LIMIT 1', [class_id])
+    const classResult = await pool.query('SELECT class_id, teacher_id FROM classes WHERE class_id = $1 LIMIT 1', [
+      class_id
+    ])
     if (classResult.rows.length === 0) {
       return res.status(400).json({ error: `class_id ${class_id} không tồn tại trong bảng classes` })
+    }
+
+    if (!isAdmin && isTeacher && classResult.rows[0].teacher_id !== created_by) {
+      return res.status(403).json({ error: 'Bạn chỉ được tạo buổi cho lớp của mình' })
     }
 
     const result = await pool.query(
@@ -66,6 +75,15 @@ const createSession = async (req, res) => {
        RETURNING *`,
       [class_id, session_date, startTimestamp, endTimestamp, created_by]
     )
+
+    await writeAuditLog({
+      userId: created_by,
+      actionName: 'attendance.session.create',
+      actionData: {
+        attendance_session_id: result.rows[0].attendance_session_id,
+        class_id
+      }
+    })
 
     return res.status(201).json({
       message: 'Tạo buổi điểm danh thành công',
@@ -82,14 +100,29 @@ const createSession = async (req, res) => {
 const openSession = async (req, res) => {
   try {
     const { attendance_session_id } = req.body
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
 
     if (!attendance_session_id) {
       return res.status(400).json({ error: 'attendance_session_id là bắt buộc' })
     }
 
+    const sessionAccess = await pool.query(
+      `SELECT s.attendance_session_id
+       FROM attendance_sessions s
+       JOIN classes c ON c.class_id = s.class_id
+       WHERE s.attendance_session_id = $1
+       AND ($2::boolean = true OR ($3::boolean = true AND c.teacher_id = $4))`,
+      [attendance_session_id, isAdmin, isTeacher, req.user.user_id]
+    )
+
+    if (sessionAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Bạn không có quyền mở buổi điểm danh này' })
+    }
+
     const result = await pool.query(
-      `UPDATE attendance_sessions 
-       SET status = 'open', updated_at = NOW() 
+      `UPDATE attendance_sessions
+       SET status = 'open'
        WHERE attendance_session_id = $1 AND status IN ('planning', 'closed')
        RETURNING *`,
       [attendance_session_id]
@@ -98,6 +131,14 @@ const openSession = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Không tìm thấy buổi điểm danh hoặc buổi đã mở' })
     }
+
+    await writeAuditLog({
+      userId: req.user?.user_id,
+      actionName: 'attendance.session.open',
+      actionData: {
+        attendance_session_id
+      }
+    })
 
     return res.json({
       message: 'Mở buổi điểm danh thành công',
@@ -111,14 +152,29 @@ const openSession = async (req, res) => {
 const closeSession = async (req, res) => {
   try {
     const { attendance_session_id } = req.body
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
 
     if (!attendance_session_id) {
       return res.status(400).json({ error: 'attendance_session_id là bắt buộc' })
     }
 
+    const sessionAccess = await pool.query(
+      `SELECT s.attendance_session_id
+       FROM attendance_sessions s
+       JOIN classes c ON c.class_id = s.class_id
+       WHERE s.attendance_session_id = $1
+       AND ($2::boolean = true OR ($3::boolean = true AND c.teacher_id = $4))`,
+      [attendance_session_id, isAdmin, isTeacher, req.user.user_id]
+    )
+
+    if (sessionAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Bạn không có quyền đóng buổi điểm danh này' })
+    }
+
     const result = await pool.query(
-      `UPDATE attendance_sessions 
-       SET status = 'closed', updated_at = NOW() 
+      `UPDATE attendance_sessions
+       SET status = 'closed'
        WHERE attendance_session_id = $1 AND status = 'open'
        RETURNING *`,
       [attendance_session_id]
@@ -127,6 +183,14 @@ const closeSession = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Không tìm thấy buổi hoặc buổi chưa mở' })
     }
+
+    await writeAuditLog({
+      userId: req.user?.user_id,
+      actionName: 'attendance.session.close',
+      actionData: {
+        attendance_session_id
+      }
+    })
 
     return res.json({
       message: 'Đóng buổi điểm danh thành công',
@@ -139,27 +203,69 @@ const closeSession = async (req, res) => {
 
 const getSessionList = async (req, res) => {
   try {
-    const { class_id, status } = req.query
+    const { class_id, status, q, date_from, date_to, page = 1, limit = 10 } = req.query
+    const offset = (page - 1) * limit
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
 
-    let query = `SELECT * FROM attendance_sessions WHERE 1=1`
+    let whereClause = 'WHERE 1=1'
     const params = []
 
+    if (!isAdmin && isTeacher) {
+      whereClause += ` AND c.teacher_id = $${params.length + 1}`
+      params.push(req.user.user_id)
+    } else if (!isAdmin && !isTeacher && req.user.class_id) {
+      whereClause += ` AND s.class_id = $${params.length + 1}`
+      params.push(req.user.class_id)
+    }
+
     if (class_id) {
-      query += ` AND class_id = $${params.length + 1}`
+      whereClause += ` AND s.class_id = $${params.length + 1}`
       params.push(class_id)
     }
 
     if (status) {
-      query += ` AND status = $${params.length + 1}`
+      whereClause += ` AND s.status = $${params.length + 1}`
       params.push(status)
     }
 
-    query += ` ORDER BY session_date DESC, created_at DESC`
+    if (q) {
+      whereClause += ` AND c.class_name ILIKE $${params.length + 1}`
+      params.push(`%${q}%`)
+    }
+
+    if (date_from) {
+      whereClause += ` AND s.session_date >= $${params.length + 1}`
+      params.push(date_from)
+    }
+
+    if (date_to) {
+      whereClause += ` AND s.session_date <= $${params.length + 1}`
+      params.push(date_to)
+    }
+
+    const query = `
+      SELECT s.*, c.class_name,
+             count(*) OVER() AS total_count
+      FROM attendance_sessions s
+      JOIN classes c ON c.class_id = s.class_id
+      ${whereClause}
+      ORDER BY s.session_date DESC, s.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `
+    params.push(limit, offset)
 
     const result = await pool.query(query, params)
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0
+
     return res.json({
       sessions: result.rows,
-      total: result.rows.length
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit)
+      }
     })
   } catch (error) {
     return res.status(500).json({ error: error.message })
@@ -176,6 +282,19 @@ const getSessionDetails = async (req, res) => {
 
     if (sessionResult.rows.length === 0) {
       return res.status(404).json({ error: 'Không tìm thấy buổi điểm danh' })
+    }
+
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
+
+    if (!isAdmin && isTeacher) {
+      const classAccess = await pool.query(
+        'SELECT class_id FROM classes WHERE class_id = $1 AND teacher_id = $2 LIMIT 1',
+        [sessionResult.rows[0].class_id, req.user.user_id]
+      )
+      if (classAccess.rows.length === 0) {
+        return res.status(403).json({ error: 'Bạn không có quyền xem buổi điểm danh này' })
+      }
     }
 
     const recordsResult = await pool.query(
@@ -227,7 +346,7 @@ const scanAttendance = async (req, res) => {
         [currentUserId, captured_image_url || null, null, 0, 'failed']
       )
 
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         message: 'Không xác thực được khuôn mặt để điểm danh'
       })
@@ -247,7 +366,8 @@ const scanAttendance = async (req, res) => {
 
       return res.status(403).json({
         success: false,
-        message: 'Khuôn mặt không khớp tài khoản đăng nhập'
+        message: 'Khuôn mặt không khớp tài khoản đăng nhập hoặc chưa đăng ký',
+        similarity
       })
     }
 
@@ -290,6 +410,17 @@ const scanAttendance = async (req, res) => {
     }
 
     const session = sessionResult.rows[0]
+
+    // Kiểm tra xem học sinh có thuộc lớp của buổi điểm danh này không
+    if (!req.user.roles?.includes('admin') && !req.user.roles?.includes('teacher')) {
+      if (session.class_id !== req.user.class_id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không thuộc lớp học của buổi điểm danh này'
+        })
+      }
+    }
+
     if (session.status !== 'open') {
       return res.status(400).json({
         success: false,
@@ -297,11 +428,25 @@ const scanAttendance = async (req, res) => {
       })
     }
 
+    const existingAttendance = await pool.query(
+      `SELECT attendance_id, check_in_time
+       FROM attendance_records
+       WHERE attendance_session_id = $1 AND user_id = $2
+       LIMIT 1`,
+      [session.attendance_session_id, currentUserId]
+    )
+
+    if (existingAttendance.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Bạn đã điểm danh thành công trong buổi này rồi',
+        attendance: existingAttendance.rows[0]
+      })
+    }
+
     const attendanceResult = await pool.query(
       `INSERT INTO attendance_records (attendance_session_id, user_id, check_in_time, attendance_status)
        VALUES ($1, $2, NOW(), 'present')
-       ON CONFLICT (attendance_session_id, user_id)
-       DO UPDATE SET check_in_time = EXCLUDED.check_in_time, attendance_status = 'present'
        RETURNING *`,
       [session.attendance_session_id, currentUserId]
     )
@@ -312,6 +457,17 @@ const scanAttendance = async (req, res) => {
       attendance.attendance_id,
       captured_image_url || null
     ])
+
+    await writeAuditLog({
+      userId: currentUserId,
+      actionName: 'attendance.scan.success',
+      actionData: {
+        attendance_id: attendance.attendance_id,
+        attendance_session_id: session.attendance_session_id,
+        similarity,
+        captured_image_url: captured_image_url || null
+      }
+    })
 
     return res.json({
       success: true,
@@ -327,11 +483,178 @@ const scanAttendance = async (req, res) => {
   }
 }
 
+const getAttendanceLogs = async (req, res) => {
+  try {
+    const { attendance_session_id, q, page = 1, limit = 20 } = req.query
+    const offset = (page - 1) * limit
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
+
+    let whereClause = 'WHERE 1=1'
+    const params = []
+
+    if (!isAdmin && isTeacher) {
+      whereClause += ` AND c.teacher_id = $${params.length + 1}`
+      params.push(req.user.user_id)
+    }
+
+    if (attendance_session_id) {
+      whereClause += ` AND ar.attendance_session_id = $${params.length + 1}`
+      params.push(Number(attendance_session_id))
+    }
+
+    if (q) {
+      whereClause += ` AND (u.full_name ILIKE $${params.length + 1} OR u.user_code ILIKE $${params.length + 1} OR u.email ILIKE $${params.length + 1})`
+      params.push(`%${q}%`)
+    }
+
+    const query = `
+      SELECT 
+        al.*, 
+        ar.check_in_time, ar.attendance_status,
+        s.session_date,
+        c.class_name,
+        u.full_name, u.user_code, u.email,
+        count(*) OVER() AS total_count
+      FROM attendance_logs al
+      JOIN attendance_records ar ON ar.attendance_id = al.attendance_id
+      JOIN attendance_sessions s ON s.attendance_session_id = ar.attendance_session_id
+      JOIN classes c ON c.class_id = s.class_id
+      JOIN users u ON u.user_id = ar.user_id
+      ${whereClause}
+      ORDER BY al.log_time DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `
+    params.push(limit, offset)
+
+    const result = await pool.query(query, params)
+    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0
+
+    return res.json({
+      logs: result.rows,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total_pages: Math.ceil(total / limit)
+      }
+    })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+const deleteSession = async (req, res) => {
+  try {
+    const { id } = req.params
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
+
+    const sessionAccess = await pool.query(
+      `SELECT s.attendance_session_id
+       FROM attendance_sessions s
+       JOIN classes c ON c.class_id = s.class_id
+       WHERE s.attendance_session_id = $1
+       AND ($2::boolean = true OR ($3::boolean = true AND c.teacher_id = $4))`,
+      [id, isAdmin, isTeacher, req.user.user_id]
+    )
+
+    if (sessionAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Bạn không có quyền xoá buổi điểm danh này' })
+    }
+
+    await pool.query('DELETE FROM attendance_sessions WHERE attendance_session_id = $1', [id])
+    return res.json({ message: 'Xoá buổi điểm danh thành công' })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+const deleteAttendanceRecord = async (req, res) => {
+  try {
+    const { id } = req.params
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
+
+    // Kiểm tra quyền (phải là giáo viên của lớp đó hoặc admin)
+    const recordAccess = await pool.query(
+      `SELECT ar.attendance_id
+       FROM attendance_records ar
+       JOIN attendance_sessions s ON ar.attendance_session_id = s.attendance_session_id
+       JOIN classes c ON c.class_id = s.class_id
+       WHERE ar.attendance_id = $1
+       AND ($2::boolean = true OR ($3::boolean = true AND c.teacher_id = $4))`,
+      [id, isAdmin, isTeacher, req.user.user_id]
+    )
+
+    if (recordAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Bạn không có quyền xoá bản ghi điểm danh này' })
+    }
+
+    await pool.query('DELETE FROM attendance_records WHERE attendance_id = $1', [id])
+    return res.json({ message: 'Xoá bản ghi điểm danh thành công' })
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
+const manualAttendance = async (req, res) => {
+  try {
+    const { attendance_session_id, user_id, attendance_status } = req.body
+    const isAdmin = req.user?.roles?.includes('admin')
+    const isTeacher = req.user?.roles?.includes('teacher')
+
+    if (!attendance_session_id || !user_id) {
+      return res.status(400).json({ error: 'Thiếu thông tin buổi hoặc học sinh' })
+    }
+
+    // Kiểm tra quyền
+    const sessionAccess = await pool.query(
+      `SELECT s.attendance_session_id
+       FROM attendance_sessions s
+       JOIN classes c ON c.class_id = s.class_id
+       WHERE s.attendance_session_id = $1
+       AND ($2::boolean = true OR ($3::boolean = true AND c.teacher_id = $4))`,
+      [attendance_session_id, isAdmin, isTeacher, req.user.user_id]
+    )
+
+    if (sessionAccess.rows.length === 0) {
+      return res.status(403).json({ error: 'Bạn không có quyền can thiệp điểm danh buổi này' })
+    }
+
+    // Kiểm tra xem đã có bản ghi chưa
+    const existing = await pool.query(
+      'SELECT attendance_id FROM attendance_records WHERE attendance_session_id = $1 AND user_id = $2',
+      [attendance_session_id, user_id]
+    )
+
+    if (existing.rows.length > 0) {
+      await pool.query(
+        'UPDATE attendance_records SET attendance_status = $1, check_in_time = NOW() WHERE attendance_id = $2',
+        [attendance_status || 'present', existing.rows[0].attendance_id]
+      )
+      return res.json({ message: 'Cập nhật điểm danh thành công' })
+    } else {
+      await pool.query(
+        'INSERT INTO attendance_records (attendance_session_id, user_id, check_in_time, attendance_status) VALUES ($1, $2, NOW(), $3)',
+        [attendance_session_id, user_id, attendance_status || 'present']
+      )
+      return res.json({ message: 'Đã đánh dấu điểm danh thành công' })
+    }
+  } catch (error) {
+    return res.status(500).json({ error: error.message })
+  }
+}
+
 module.exports = {
   createSession,
   openSession,
   closeSession,
   getSessionList,
   getSessionDetails,
-  scanAttendance
+  scanAttendance,
+  getAttendanceLogs,
+  deleteSession,
+  deleteAttendanceRecord,
+  manualAttendance
 }
