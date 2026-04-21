@@ -53,8 +53,14 @@ const login = async (req, res) => {
       return res.status(400).json({ error: 'Email và password là bắt buộc' })
     }
 
-    // Tìm user bằng email
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email])
+    // Tìm user bằng email kèm thông tin lớp
+    const userResult = await pool.query(
+      `SELECT u.*, c.class_name
+       FROM users u
+       LEFT JOIN classes c ON u.class_id = c.class_id
+       WHERE u.email = $1`,
+      [email]
+    )
     if (userResult.rows.length === 0) {
       return res.status(401).json({ error: 'Sai email hoặc mật khẩu' })
     }
@@ -85,7 +91,15 @@ const login = async (req, res) => {
     res.json({ 
         message: 'Đăng nhập thành công', 
         token, 
-        user: { user_id: user.user_id, email: user.email, full_name: user.full_name, roles } 
+        user: { 
+          user_id: user.user_id, 
+          email: user.email, 
+          full_name: user.full_name, 
+          user_code: user.user_code,
+          class_id: user.class_id,
+          class_name: user.class_name,
+          roles 
+        } 
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -98,7 +112,11 @@ const getMe = async (req, res) => {
     // req.user.user_id được lấy từ middleware requireAuth
     const userId = req.user.user_id
     const userResult = await pool.query(
-      'SELECT user_id, user_code, email, full_name, avatar_url, class_id, user_status FROM users WHERE user_id = $1',
+      `SELECT u.user_id, u.user_code, u.email, u.full_name, u.avatar_url, u.class_id, u.user_status,
+              c.class_name
+       FROM users u
+       LEFT JOIN classes c ON u.class_id = c.class_id
+       WHERE u.user_id = $1`,
       [userId]
     )
     
