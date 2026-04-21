@@ -11,6 +11,7 @@ app.use(cors()) // Cho phép Frontend gọi API
 app.use(express.json({ limit: '10mb' })) // Cho phép payload ảnh base64 khi test API nhận diện khuôn mặt
 app.use(express.urlencoded({ extended: true, limit: '10mb' })) // Cho phép payload lớn từ form/urlencoded
 app.use(express.static(path.join(__dirname, '../public')))
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 // 2. Định nghĩa các Routes
 const authRoutes = require('./routes/auth.routes')
@@ -19,6 +20,7 @@ const classRoutes = require('./routes/class.routes')
 const attendanceRoutes = require('./routes/attendance.routes')
 const notificationRoutes = require('./routes/notification.routes')
 const faceRoutes = require('./routes/face.routes')
+const auditRoutes = require('./routes/audit.routes')
 
 app.use('/auth', authRoutes)
 app.use('/users', userRoutes)
@@ -26,6 +28,7 @@ app.use('/classes', classRoutes)
 app.use('/notifications', notificationRoutes)
 app.use('/face', faceRoutes)
 app.use('/attendance', attendanceRoutes)
+app.use('/audit', auditRoutes)
 
 // 3. Các API test mặc định
 app.get('/', (req, res) => {
